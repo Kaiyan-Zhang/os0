@@ -27,59 +27,63 @@ cond_broadcast(struct condition *cond, struct lock *lock) __attribute__((unused)
 
 struct station {
 	// 根据caltrain-runner.c,应该是有1000个乘客
-    int waiting;
-	int seats;
-	int boarding;
-	int boarded;
-    struct lock lock;
-    struct condition train_available;
-    struct condition train_to_leave;
+    int waiting; //正在等车的人
+	int boarding;//正在上车但是还没坐稳的人...这也算本题特色了吧
+	int seated;//已经坐稳的人
+	int free_seats;//车上的空位置
+    struct lock mutex;
+    struct condition you_may_board;
+    struct condition train_may_leave;
 };
 
 void station_init(struct station *station) {
-	// main函数的开头
     station->waiting = 0;
-    station->seats = 0;
+    station->free_seats = 0;
     station->boarding = 0;
-    station->boarded = 0;
-    lock_init(&station->lock);
-    cond_init(&station->train_available);
-    cond_init(&station->train_to_leave);
+    station->seated = 0;
+    lock_init(&station->mutex);
+    cond_init(&station->you_may_board);
+    cond_init(&station->train_may_leave);
 }
 
 void station_load_train(struct station *station, int count) {
-	//或者线程
-	//count大概描述的是free_seats
-    lock_acquire(&station->lock);
+	//火车线程
+    lock_acquire(&station->mutex);
+	//描述上车之前的状态
     station->boarding = 0;
-    station->boarded = 0;
-    station->seats = count;
-    cond_broadcast(&station->train_available, &station->lock);
-    while (station->boarded < station->seats && (station->waiting > 0 || station->boarding > 0)){
-        cond_wait(&station->train_to_leave, &station->lock);
+    station->seated = 0;
+    station->free_seats = count;
+	//通知所有乘客车来了, 它们都有同等的机会能上车
+    cond_broadcast(&station->you_may_board, &station->mutex);
+	//直到没有乘客上车了,或者才能开车
+    while (station->seated < station->free_seats && (station->waiting > 0 || station->boarding > 0)){
+        cond_wait(&station->train_may_leave, &station->mutex);
 	}
-    station->seats = 0;
-    station->boarded = 0;
-    lock_release(&station->lock);
+	//火车开车了
+    station->free_seats = 0;
+    station->seated = 0;
+    lock_release(&station->mutex);
 }
 
 void station_wait_for_train(struct station *station) {
-	//乘客线程
-    lock_acquire(&station->lock);
+	//乘客上车
+    lock_acquire(&station->mutex);
     station->waiting++;
-    while (station->boarding + station->boarded >= station->seats){
-		cond_wait(&station->train_available, &station->lock);
+	//只有火车来了才能上车
+    while (station->boarding + station->seated >= station->free_seats){
+		cond_wait(&station->you_may_board, &station->mutex);
 	}
     station->boarding++;
     station->waiting--;
-    lock_release(&station->lock);
+    lock_release(&station->mutex);
 }
 
 void station_on_board(struct station *station) {
-	// FILL ME IN
-    lock_acquire(&station->lock);
-    station->boarded++;
+	//乘客在车上找座位
+    lock_acquire(&station->mutex);
+    station->seated++;
     station->boarding--;
-    cond_signal(&station->train_to_leave, &station->lock);
-    lock_release(&station->lock);
+	//通知火车"我已经坐稳了"
+    cond_signal(&station->train_may_leave, &station->mutex);
+    lock_release(&station->mutex);
 }
