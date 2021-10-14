@@ -26,7 +26,6 @@ cond_broadcast(struct condition *cond, struct lock *lock) __attribute__((unused)
 */
 
 struct station {
-	// 根据caltrain-runner.c,应该是有1000个乘客
     int waiting; //正在等车的人
 	int boarding;//正在上车但是还没坐稳的人...这也算本题特色了吧
 	int seated;//已经坐稳的人
@@ -46,8 +45,8 @@ void station_init(struct station *station) {
     cond_init(&station->train_may_leave);
 }
 
+//火车线程, 只要乘客还有, 这样的线程就会不停地被创建
 void station_load_train(struct station *station, int count) {
-	//火车线程
     lock_acquire(&station->mutex);
 	//描述上车之前的状态
     station->boarding = 0;
@@ -65,8 +64,8 @@ void station_load_train(struct station *station, int count) {
     lock_release(&station->mutex);
 }
 
+//乘客上车
 void station_wait_for_train(struct station *station) {
-	//乘客上车
     lock_acquire(&station->mutex);
     station->waiting++;
 	//只有火车来了才能上车
