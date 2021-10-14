@@ -16,7 +16,7 @@
 #define LOCK_COND_INIT_MAGIC 0x4a3acd94
 
 struct lock {
-	int init;
+	int init;  //我不用管
 	pthread_mutex_t mutex;
 };
 
